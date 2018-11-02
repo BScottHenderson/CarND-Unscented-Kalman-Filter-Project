@@ -3,3 +3,7 @@
 
 # build files
 build/
+
+# Visual Studio files
+.vs/
+x64/
