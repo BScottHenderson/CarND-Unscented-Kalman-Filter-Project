@@ -24,6 +24,10 @@ public:
   */
   VectorXd CalculateRMSE(const vector<VectorXd> &estimations, const vector<VectorXd> &ground_truth);
 
+  /**
+  * A helper method to calculate NIS.
+  */
+  static double CalculateNIS(const VectorXd &meas, const VectorXd &meas_pred, const MatrixXd &covariance_pred);
 };
 
 #endif /* TOOLS_H_ */

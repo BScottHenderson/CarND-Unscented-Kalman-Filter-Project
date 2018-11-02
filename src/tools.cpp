@@ -45,3 +45,11 @@ VectorXd Tools::CalculateRMSE(const vector<VectorXd> &estimations,
   //return the result
   return rmse;
 }
+
+double Tools::CalculateNIS(const VectorXd &meas,
+                           const VectorXd &meas_pred,
+                           const MatrixXd &covariance_pred) {
+  VectorXd  residual = meas - meas_pred;
+  double  nis = residual.transpose() * covariance_pred.inverse() * residual;
+  return nis;
+}
