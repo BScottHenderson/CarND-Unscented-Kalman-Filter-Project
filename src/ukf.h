@@ -34,6 +34,9 @@ public:
   ///* time when the state is true, in us
   long long time_us_;
 
+  ///* Simple counter used to track each step for debugging.
+  int current_step_;
+
   ///* Process noise standard deviation longitudinal acceleration in m/s^2
   double std_a_;
 
@@ -64,8 +67,17 @@ public:
   ///* Augmented state dimension
   int n_aug_;
 
+  ///* Number of sigma points
+  int n_sig_;
+
   ///* Sigma point spreading parameter
   double lambda_;
+
+  ///* NIS for laser
+  double nis_laser_;
+
+  ///* NIS for radar
+  double nis_radar_;
 
 
   /**
@@ -102,6 +114,23 @@ public:
    * @param meas_package The measurement at k+1
    */
   void UpdateRadar(MeasurementPackage meas_package);
+
+  /**
+   * Updates the state and the state covariance matrix using a laser or radar measurement.
+   * @param {VectorXd} z
+   * @param {int} n_z
+   * @param {int} meas_angle_index
+   * @param {MatrixXd} Zsig
+   * @param {MatrixXd} R
+   * @return {double} nis
+   */
+  double UpdateHelper(VectorXd z, int n_z, int meas_angle_index, MatrixXd Zsig, MatrixXd R);
+
+  /**
+   * Normalize an angle to the range [-pi, pi]
+   * @param {double &} angle
+   */
+  void NormalizeAngle(double &angle);
 };
 
 #endif /* UKF_H */
