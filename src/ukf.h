@@ -74,10 +74,10 @@ public:
   double lambda_;
 
   ///* NIS for laser
-  double nis_laser_;
+  std::vector<double> nis_laser_;
 
   ///* NIS for radar
-  double nis_radar_;
+  std::vector<double> nis_radar_;
 
 
   /**
@@ -106,14 +106,16 @@ public:
   /**
    * Updates the state and the state covariance matrix using a laser measurement
    * @param meas_package The measurement at k+1
+   * @return {double} nis
    */
-  void UpdateLidar(MeasurementPackage meas_package);
+  double UpdateLidar(MeasurementPackage meas_package);
 
   /**
    * Updates the state and the state covariance matrix using a radar measurement
    * @param meas_package The measurement at k+1
+   * @return {double} nis
    */
-  void UpdateRadar(MeasurementPackage meas_package);
+  double UpdateRadar(MeasurementPackage meas_package);
 
   /**
    * Updates the state and the state covariance matrix using a laser or radar measurement.

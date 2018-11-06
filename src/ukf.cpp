@@ -8,6 +8,8 @@ using Eigen::MatrixXd;
 using Eigen::VectorXd;
 using std::vector;
 
+#define WRITE_NIS 0
+
 /**
  * Initializes Unscented Kalman filter
  * This is scaffolding, do not modify
@@ -69,11 +71,10 @@ UKF::UKF() {
   lambda_ = 3 - n_aug_;
 
   // Process noise standard deviation longitudinal acceleration in m/s^2
-  std_a_ = 30;
+  std_a_ = 4.0;
 
   // Process noise standard deviation yaw acceleration in rad/s^2
-  std_yawdd_ = 30;
-
+  std_yawdd_ = 0.3;
 
   Xsig_pred_ = MatrixXd(n_x_, n_sig_);  // # of rows == size of state vector
                                         // # of cols == number of sigma points
@@ -83,6 +84,9 @@ UKF::UKF() {
   weights_(0) = lambda_ / (lambda_ + n_aug_);
   for (int i = 1; i < n_sig_; ++i)
     weights_(i) = 0.5 / (lambda_ + n_aug_);
+
+  use_laser_ = true;
+  use_radar_ = true;
 }
 
 UKF::~UKF() {}
@@ -111,14 +115,21 @@ void UKF::ProcessMeasurement(MeasurementPackage meas_package) {
     */
 
     // first measurement
-    cout << "UKF: " << endl;
+    cout << "nis" << endl;
+    //cout << "UKF: " << endl;
 
     // Save the current timestamp so we can calculate delta next time.
     time_us_ = meas_package.timestamp_;
     current_step_ = 0;
 
+    // Initial state covariance matrix.
+    // Start with an identity matrix.
+    // Update using measurement-specific standard deviation.
+    P_ = MatrixXd::Identity(n_x_, n_x_);
+
     // Initial state (location, velocity).
-    if (use_laser_ && meas_package.sensor_type_ == MeasurementPackage::LASER) {
+    // Note: for the initial state we use laser or radar regardless of the "use_[laser|radar]_" flag values.
+    if (meas_package.sensor_type_ == MeasurementPackage::LASER) {
       /**
       Initialize state.
       */
@@ -131,9 +142,14 @@ void UKF::ProcessMeasurement(MeasurementPackage meas_package) {
       double  yaw_rate = 0;
 
       x_ << p_x, p_y, v, yaw, yaw_rate;
-      cout << "Initial measurement: LASER" << endl;
+      //cout << "Initial measurement: LASER" << endl;
+
+      // Adjust the initial state covariance matrix using
+      // standard deviation for laser measurements.
+      P_(0, 0) = std_laspx_;
+      P_(1, 1) = std_laspy_;
     }
-    else if (use_radar_ && meas_package.sensor_type_ == MeasurementPackage::RADAR) {
+    else if (meas_package.sensor_type_ == MeasurementPackage::RADAR) {
       /**
       Convert radar from polar to cartesian coordinates and initialize state.
       */
@@ -155,11 +171,14 @@ void UKF::ProcessMeasurement(MeasurementPackage meas_package) {
       double  yaw_rate = 0;
 
       x_ << p_x, p_y, v, yaw, yaw_rate;
-      cout << "Initial measurement: RADAR" << endl;
-    }
+      //cout << "Initial measurement: RADAR" << endl;
 
-    // Initial state covariance matrix.
-    P_ = MatrixXd::Identity(n_x_, n_x_);
+      // Adjust the initial state covariance matrix using
+      // standard deviation for radar measurements.
+      P_(0, 0) = std_radr_;
+      P_(1, 1) = std_radphi_;
+      P_(2, 2) = std_radrd_;
+    }
 
     // done initializing, no need to predict or update
     is_initialized_ = true;
@@ -170,7 +189,7 @@ void UKF::ProcessMeasurement(MeasurementPackage meas_package) {
    *  Prediction
    ****************************************************************************/
 
-  cout << "step: " << ++current_step_ << endl;
+  //cout << "step: " << ++current_step_ << endl;
 
   // Calculate elapsed time in seconds.
   float dt = (meas_package.timestamp_ - time_us_) / 1000000.0F;
@@ -184,13 +203,21 @@ void UKF::ProcessMeasurement(MeasurementPackage meas_package) {
    ****************************************************************************/
 
   if (use_laser_ && meas_package.sensor_type_ == MeasurementPackage::LASER) {
-    UpdateLidar(meas_package);
+    double  nis = UpdateLidar(meas_package);
+#if WRITE_NIS
+    cout << nis << endl;
+    nis_laser_.push_back(nis);
+#endif
   }
   else if (use_radar_ && meas_package.sensor_type_ == MeasurementPackage::RADAR) {
-    UpdateRadar(meas_package);
+    double  nis = UpdateRadar(meas_package);
+#if WRITE_NIS
+    cout << nis << endl;
+    nis_radar_.push_back(nis);
+#endif
   }
 
-  // print the output
+  // Write values to stdout.
   //cout << "x_ = " << endl << x_ << endl;
   //cout << "P_ = " << endl << P_ << endl;
 }
@@ -207,28 +234,6 @@ void UKF::Prediction(double delta_t) {
   Complete this function! Estimate the object's location. Modify the state
   vector, x_. Predict sigma points, the state, and the state covariance matrix.
   */
-
-  /*****************************************************************************
-   *  Generate sigma points
-   ****************************************************************************/
-
-  //MatrixXd  Xsig = MatrixXd(n_x_, n_sig_);
-
-  //// Calculate square root of P
-  //// (lower triangular matrix L of the matrix P such that P = L*L^)
-  //MatrixXd A = P_.llt().matrixL();
-
-  //// First sigma point is just the state vector.
-  //Xsig.col(0) = x_;
-
-  //// Set remaining sigma points based on the sigma point formula.
-  //MatrixXd T = sqrt(lambda_ + n_x_) * A;
-  //for (int i = 0; i < n_x_; i++)
-  //{
-  //  Xsig.col(1 + i)        = x_ + T.col(i);
-  //  Xsig.col(n_x_ + 1 + i) = x_ - T.col(i);
-  //}
-
 
   /*****************************************************************************
    *  Generate augmented sigma points
@@ -338,8 +343,9 @@ void UKF::Prediction(double delta_t) {
 /**
  * Updates the state and the state covariance matrix using a laser measurement.
  * @param {MeasurementPackage} meas_package
+ * @return {double} nis
  */
-void UKF::UpdateLidar(MeasurementPackage meas_package) {
+double UKF::UpdateLidar(MeasurementPackage meas_package) {
   /**
   TODO:
 
@@ -386,14 +392,15 @@ void UKF::UpdateLidar(MeasurementPackage meas_package) {
    ****************************************************************************/
 
   int meas_angle_index = -1;  // No measurement angle for laser measurements.
-  nis_laser_ = UpdateHelper(z, n_z, meas_angle_index, Zsig, R);
+  return UpdateHelper(z, n_z, meas_angle_index, Zsig, R);
 }
 
 /**
  * Updates the state and the state covariance matrix using a radar measurement.
  * @param {MeasurementPackage} meas_package
+ * @return {double} nis
  */
-void UKF::UpdateRadar(MeasurementPackage meas_package) {
+double UKF::UpdateRadar(MeasurementPackage meas_package) {
   /**
   TODO:
 
@@ -452,7 +459,7 @@ void UKF::UpdateRadar(MeasurementPackage meas_package) {
    ****************************************************************************/
 
   int meas_angle_index = 1; // 2nd element - index 1 - is bearing
-  nis_radar_ = UpdateHelper(z, n_z, meas_angle_index, Zsig, R);
+  return UpdateHelper(z, n_z, meas_angle_index, Zsig, R);
 }
 
 
