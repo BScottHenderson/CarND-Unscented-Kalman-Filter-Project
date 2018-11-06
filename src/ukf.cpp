@@ -115,7 +115,9 @@ void UKF::ProcessMeasurement(MeasurementPackage meas_package) {
     */
 
     // first measurement
+#if WRITE_NIS
     cout << "nis" << endl;
+#endif
     //cout << "UKF: " << endl;
 
     // Save the current timestamp so we can calculate delta next time.
