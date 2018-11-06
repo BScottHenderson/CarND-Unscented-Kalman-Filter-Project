@@ -10,6 +10,8 @@ using namespace std;
 // for convenience
 using json = nlohmann::json;
 
+#define WRITE_RMSE  0
+
 // Checks if the SocketIO event has JSON data.
 // If there is data the JSON object in string format will be returned,
 // else the empty string "" will be returned.
@@ -38,6 +40,10 @@ int main()
   vector<VectorXd> estimations;
   vector<VectorXd> ground_truth;
 
+#if WRITE_RMSE
+  cout << "rmse_x,rmse_y,rmse_vx,rmse_vy" << endl;
+#endif
+
   h.onMessage([&ukf,&tools,&estimations,&ground_truth](uWS::WebSocket<uWS::SERVER>* ws, char *data, size_t length, uWS::OpCode opCode) {
     // "42" at the start of the message means there's a websocket message event.
     // The 4 signifies a websocket message
@@ -45,7 +51,6 @@ int main()
 
     if (length && length > 2 && data[0] == '4' && data[1] == '2')
     {
-
       auto s = hasData(std::string(data));
       if (s != "") {
 
@@ -127,6 +132,10 @@ int main()
           estimations.push_back(estimate);
 
           VectorXd RMSE = tools.CalculateRMSE(estimations, ground_truth);
+
+#if WRITE_RMSE
+          cout << RMSE(0) << "," << RMSE(1) << "," << RMSE(2) << "," << RMSE(3) << endl;
+#endif
 
           json msgJson;
           msgJson["estimate_x"] = p_x;
